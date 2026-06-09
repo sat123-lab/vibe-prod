@@ -1,5 +1,6 @@
 package com.example.demo.controller;
 
+import com.example.demo.dto.PostFeedDto;
 import com.example.demo.dto.PostRequest;
 import com.example.demo.entity.Post;
 import com.example.demo.entity.User;
@@ -82,14 +83,14 @@ public class PostController {
 
     @GetMapping("/feed")
 
-    public List<Post> getFeed(Authentication authentication) {
+    public List<PostFeedDto> getFeed(Authentication authentication) {
         String email = authentication != null ? authentication.getName() : null;
         return postService.getFeed(email);
     }
 
     @GetMapping("/feed/page")
 
-    public List<Post> getFeedPage(
+    public List<PostFeedDto> getFeedPage(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
             Authentication authentication

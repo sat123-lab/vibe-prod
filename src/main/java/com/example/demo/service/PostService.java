@@ -1,5 +1,6 @@
 package com.example.demo.service;
 
+import com.example.demo.dto.PostFeedDto;
 import com.example.demo.dto.PostRequest;
 import com.example.demo.entity.Post;
 import com.example.demo.entity.User;
@@ -10,6 +11,7 @@ import com.example.demo.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDateTime;
@@ -142,7 +144,7 @@ public class PostService {
 
     private boolean canViewUserContent(User author, User viewer) {
         if (author == null) {
-            return false;
+            return true;
         }
         if (!author.isPrivateAccount()) {
             return true;
@@ -163,20 +165,27 @@ public class PostService {
                 .toList();
     }
 
+    private List<PostFeedDto> mapVisibleFeedDtos(List<Post> posts, String viewerEmail) {
+        return filterVisiblePosts(posts, viewerEmail).stream()
+                .map(PostFeedDto::from)
+                .toList();
+    }
+
     // GET FEED
 
-    public List<Post> getFeed(String viewerEmail) {
-        return filterVisiblePosts(
-                postRepository.findAllByOrderByCreatedAtDesc(),
+    @Transactional(readOnly = true)
+    public List<PostFeedDto> getFeed(String viewerEmail) {
+        return mapVisibleFeedDtos(
+                postRepository.findFeedPosts(PageRequest.of(0, 50)),
                 viewerEmail
         );
     }
 
-    public List<Post> getFeedPage(int page, int size, String viewerEmail) {
-        return filterVisiblePosts(
-                postRepository.findAllByOrderByCreatedAtDesc(
-                        PageRequest.of(page, size)
-                ),
+    @Transactional(readOnly = true)
+    public List<PostFeedDto> getFeedPage(int page, int size, String viewerEmail) {
+        int safeSize = Math.min(Math.max(size, 1), 50);
+        return mapVisibleFeedDtos(
+                postRepository.findFeedPosts(PageRequest.of(page, safeSize)),
                 viewerEmail
         );
     }

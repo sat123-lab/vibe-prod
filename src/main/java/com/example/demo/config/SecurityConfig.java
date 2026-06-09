@@ -63,6 +63,7 @@ public class SecurityConfig {
                                 "/upload/**",
                                 "/uploads/**",
                                 "/posts/feed",
+                                "/posts/feed/page",
                                 "/posts/{postId}",
                                 "/posts/user/*/count",
                                 "/ads/active",

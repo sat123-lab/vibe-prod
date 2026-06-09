@@ -3,13 +3,21 @@ package com.example.demo.repository;
 import com.example.demo.entity.Post;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
 
 import java.util.List;
 
 public interface PostRepository
         extends JpaRepository<Post, Long> {
 
-    // FEED POSTS
+    // FEED POSTS — fetch author in one query (avoids N+1 on user)
+
+    @Query(
+            "SELECT p FROM Post p "
+                    + "JOIN FETCH p.user u "
+                    + "ORDER BY p.createdAt DESC"
+    )
+    List<Post> findFeedPosts(Pageable pageable);
 
     List<Post>
     findAllByOrderByCreatedAtDesc();
