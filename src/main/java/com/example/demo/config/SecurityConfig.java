@@ -8,8 +8,14 @@ import com.example.demo.security.SecurityProperties;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.ProviderManager;
+import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
@@ -22,20 +28,11 @@ import java.util.Arrays;
 import java.util.List;
 
 /**
- * Hardened security filter chain.
- *
- * <h3>Filter order (outer → inner)</h3>
- * <ol>
- *   <li>{@link SecureHeadersFilter} — sets HSTS, CSP, XCTO, XFO on every response.</li>
- *   <li>{@link RateLimitFilter} — per-IP, per-route-group throttle (429 on overflow).</li>
- *   <li>Spring CORS layer — restricted to configured origins.</li>
- *   <li>{@link JwtFilter} — parses Bearer token, sets Authentication + role authorities.</li>
- * </ol>
- *
- * <p>Session policy is STATELESS — there are no server-side HTTP sessions; every request
- * carries its own JWT.</p>
+ * Stateless JWT-only security. No form login, no HTTP Basic, and no
+ * Spring Boot generated in-memory users.
  */
 @Configuration
+@EnableWebSecurity
 @RequiredArgsConstructor
 public class SecurityConfig {
 
@@ -49,16 +46,16 @@ public class SecurityConfig {
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-                .csrf(csrf -> csrf.disable())
+                .csrf(AbstractHttpConfigurer::disable)
+                .formLogin(AbstractHttpConfigurer::disable)
+                .httpBasic(AbstractHttpConfigurer::disable)
+                .logout(AbstractHttpConfigurer::disable)
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        // CORS preflights must always be allowed — browsers send
-                        // them without an Authorization header.
                         .requestMatchers(org.springframework.http.HttpMethod.OPTIONS, "/**").permitAll()
-
-                        // Public endpoints
                         .requestMatchers(
                                 "/auth/**",
+                                "/api/auth/**",
                                 "/security/refresh",
                                 "/upload/**",
                                 "/uploads/**",
@@ -72,35 +69,32 @@ public class SecurityConfig {
                                 "/media/serve/**",
                                 "/actuator/health",
                                 "/actuator/info",
-                                // Anonymous referral landing endpoints — clicks
-                                // and code resolution are intentionally public so
-                                // marketing/web-app can hit them pre-auth.
                                 "/referrals/clicks",
                                 "/referrals/resolve"
                         ).permitAll()
-
-                        // Admin endpoints require ADMIN role
                         .requestMatchers("/admin/**").hasRole("ADMIN")
-
-                        // Everything else requires authentication
                         .anyRequest().authenticated()
                 )
-                // Return 401 (not 403) when no/invalid token is provided. This is
-                // the conventional signal for clients to refresh and retry.
                 .exceptionHandling(eh -> eh.authenticationEntryPoint((req, res, ex) -> {
                     res.setStatus(401);
                     res.setContentType("application/json");
                     res.getWriter().write("{\"error\":\"Authentication required\"}");
                 }))
-                // Outermost wrap: secure headers + rate limit BEFORE the JWT filter so
-                // unauthenticated abuse still hits the rate limiter.
                 .addFilterBefore(secureHeadersFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(rateLimitFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)
-                // AdminAccessGuard runs AFTER JWT so the SecurityContext is populated.
                 .addFilterAfter(adminAccessGuard, JwtFilter.class);
 
         return http.build();
+    }
+
+    @Bean
+    public AuthenticationManager authenticationManager(
+            UserDetailsService userDetailsService,
+            PasswordEncoder passwordEncoder) {
+        DaoAuthenticationProvider provider = new DaoAuthenticationProvider(userDetailsService);
+        provider.setPasswordEncoder(passwordEncoder);
+        return new ProviderManager(provider);
     }
 
     @Bean
@@ -108,7 +102,6 @@ public class SecurityConfig {
         CorsConfiguration config = new CorsConfiguration();
         String origins = securityProperties.getCors().getAllowedOrigins();
         if (origins == null || origins.isBlank() || "*".equals(origins.trim())) {
-            // Dev fallback — allow any origin but DO NOT include credentials.
             config.setAllowedOriginPatterns(List.of("*"));
             config.setAllowCredentials(false);
         } else {
@@ -128,7 +121,6 @@ public class SecurityConfig {
 
     @Bean
     public PasswordEncoder passwordEncoder() {
-        // BCrypt with default cost (10) — easily tuned upward as hardware improves.
         return new BCryptPasswordEncoder();
     }
 }
