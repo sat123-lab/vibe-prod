@@ -32,6 +32,9 @@ public class PostService {
     @Autowired
     private FileService fileService;
 
+    @Autowired
+    private MediaUrlService mediaUrlService;
+
     /**
      * Optional — used to flip a SIGNED_UP referral to ACTIVATED when
      * the referee creates their first post. Keeps the funnel honest;
@@ -167,8 +170,52 @@ public class PostService {
 
     private List<PostFeedDto> mapVisibleFeedDtos(List<Post> posts, String viewerEmail) {
         return filterVisiblePosts(posts, viewerEmail).stream()
-                .map(PostFeedDto::from)
+                .map(this::toFeedDto)
                 .toList();
+    }
+
+    private PostFeedDto toFeedDto(Post post) {
+        PostFeedDto dto = PostFeedDto.from(post);
+        if (dto == null) {
+            return null;
+        }
+        dto.setImageUrl(mediaUrlService.resolve(dto.getImageUrl()));
+        dto.setVideoUrl(mediaUrlService.resolve(dto.getVideoUrl()));
+        dto.setThumbnailUrl(mediaUrlService.resolve(dto.getThumbnailUrl()));
+        if (dto.getUser() != null) {
+            dto.getUser().setProfileImage(
+                    mediaUrlService.resolve(dto.getUser().getProfileImage()));
+        }
+        return dto;
+    }
+
+    @Transactional(readOnly = true)
+    public List<PostFeedDto> getPostsByUserDto(Long userId, String viewerEmail) {
+        User target = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        List<Post> posts = postRepository.findByUserIdOrderByCreatedAtDesc(userId);
+
+        if (!target.isPrivateAccount()) {
+            return posts.stream().map(this::toFeedDto).toList();
+        }
+
+        if (viewerEmail == null || viewerEmail.isBlank()) {
+            return List.of();
+        }
+
+        User viewer = userRepository.findByEmail(viewerEmail)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        if (viewer.getId().equals(target.getId())) {
+            return posts.stream().map(this::toFeedDto).toList();
+        }
+
+        if (followRepository.existsByFollowerAndFollowing(viewer, target)) {
+            return posts.stream().map(this::toFeedDto).toList();
+        }
+
+        return List.of();
     }
 
     // GET FEED
@@ -188,6 +235,13 @@ public class PostService {
                 postRepository.findFeedPosts(PageRequest.of(page, safeSize)),
                 viewerEmail
         );
+    }
+
+    @Transactional(readOnly = true)
+    public PostFeedDto getPostDtoById(Long postId) {
+        Post post = postRepository.findById(postId)
+                .orElseThrow(() -> new RuntimeException("Post not found"));
+        return toFeedDto(post);
     }
 
     // GET SINGLE POST

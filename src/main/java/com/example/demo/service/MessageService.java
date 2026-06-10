@@ -7,6 +7,7 @@ import com.example.demo.entity.Notification;
 import com.example.demo.entity.User;
 import com.example.demo.repository.ChatMessageRepository;
 import com.example.demo.repository.ConversationRepository;
+import com.example.demo.repository.FollowRepository;
 import com.example.demo.repository.NotificationRepository;
 import com.example.demo.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -25,6 +26,7 @@ public class MessageService {
     private final ConversationRepository conversationRepository;
     private final ChatMessageRepository chatMessageRepository;
     private final UserRepository userRepository;
+    private final FollowRepository followRepository;
 
     private final NotificationRepository notificationRepository;
     private final RealtimeEventService realtimeEventService;
@@ -107,6 +109,14 @@ public class MessageService {
      * timer. The legacy 4-arg overload above stays for callers we don't want to
      * touch yet (e.g. call-log writers).
      */
+    public boolean canMessage(String email, Long targetUserId) {
+        User sender = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        User target = userRepository.findById(targetUserId)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        return canMessage(sender, target);
+    }
+
     public ChatMessage sendMessage(String email, com.example.demo.dto.SendMessageRequest req) {
 
         User sender = userRepository.findByEmail(email)
@@ -114,6 +124,8 @@ public class MessageService {
 
         User receiver = userRepository.findById(req.getReceiverId())
                 .orElseThrow(() -> new RuntimeException("Receiver not found"));
+
+        assertCanMessage(sender, receiver);
 
         Conversation conversation = getOrCreateConversation(sender, receiver);
 
@@ -306,5 +318,22 @@ public class MessageService {
 
         return "Active on " + user.getLastSeenAt()
                 .format(DateTimeFormatter.ofPattern("MMM d"));
+    }
+
+    private boolean canMessage(User sender, User receiver) {
+        if (sender.getId().equals(receiver.getId())) {
+            return false;
+        }
+        if (!receiver.isPrivateAccount()) {
+            return true;
+        }
+        return followRepository.existsByFollowerAndFollowing(sender, receiver);
+    }
+
+    private void assertCanMessage(User sender, User receiver) {
+        if (!canMessage(sender, receiver)) {
+            throw new RuntimeException(
+                    "You can only message this account after they accept your follow request");
+        }
     }
 }

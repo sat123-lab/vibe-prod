@@ -14,42 +14,48 @@ public class FileService {
     @Value("${file.upload-dir}")
     private String uploadDir;
 
-    public String uploadFile(
-            MultipartFile file
-    ) throws IOException {
-
-        if (file.isEmpty()) {
-
-            return null;
-        }
-
-        String fileName =
-                UUID.randomUUID()
-                        + "_"
-                        + file.getOriginalFilename();
-
-        Path uploadPath =
-                Paths.get(uploadDir);
-
-        if (!Files.exists(uploadPath)) {
-
-            Files.createDirectories(uploadPath);
-        }
-
-        Path filePath =
-                uploadPath.resolve(fileName);
-
-        Files.copy(
-                file.getInputStream(),
-                filePath,
-                StandardCopyOption.REPLACE_EXISTING
-        );
-
-        return "/uploads/" + fileName;
+    public String uploadFile(MultipartFile file) throws IOException {
+        return uploadFile(file, null);
     }
 
     /**
-     * Removes a previously uploaded file referenced by its public path (e.g. /uploads/abc.jpg).
+     * Persists a file under {@code file.upload-dir}, optionally in a sub-folder
+     * (e.g. {@code images}, {@code videos}). Returns a public path like
+     * {@code /uploads/images/uuid_name.jpg}.
+     */
+    public String uploadFile(MultipartFile file, String subDirectory) throws IOException {
+        if (file == null || file.isEmpty()) {
+            return null;
+        }
+
+        String safeOriginal = sanitizeFilename(file.getOriginalFilename());
+        String fileName = UUID.randomUUID() + "_" + safeOriginal;
+
+        Path basePath = Paths.get(uploadDir);
+        Path targetDir = subDirectory == null || subDirectory.isBlank()
+                ? basePath
+                : basePath.resolve(subDirectory.trim());
+        Files.createDirectories(targetDir);
+
+        Path filePath = targetDir.resolve(fileName);
+        Files.copy(file.getInputStream(), filePath, StandardCopyOption.REPLACE_EXISTING);
+
+        if (subDirectory == null || subDirectory.isBlank()) {
+            return "/uploads/" + fileName;
+        }
+        return "/uploads/" + subDirectory.trim() + "/" + fileName;
+    }
+
+    public String uploadImage(MultipartFile file) throws IOException {
+        return uploadFile(file, "images");
+    }
+
+    public String uploadVideo(MultipartFile file) throws IOException {
+        return uploadFile(file, "videos");
+    }
+
+    /**
+     * Removes a previously uploaded file referenced by its public path.
      */
     public void deleteFile(String publicPath) {
         if (publicPath == null || publicPath.isBlank()) {
@@ -59,15 +65,12 @@ public class FileService {
             return;
         }
 
-        String fileName = publicPath.substring("/uploads/".length());
-        if (fileName.isBlank()
-                || fileName.contains("..")
-                || fileName.contains("/")
-                || fileName.contains("\\")) {
+        String relative = publicPath.substring("/uploads/".length());
+        if (relative.isBlank() || relative.contains("..")) {
             return;
         }
 
-        Path filePath = Paths.get(uploadDir).resolve(fileName).normalize();
+        Path filePath = Paths.get(uploadDir).resolve(relative).normalize();
         Path basePath = Paths.get(uploadDir).toAbsolutePath().normalize();
         if (!filePath.toAbsolutePath().normalize().startsWith(basePath)) {
             return;
@@ -78,5 +81,16 @@ public class FileService {
         } catch (IOException ignored) {
             // Do not fail the main request if cleanup fails
         }
+    }
+
+    private static String sanitizeFilename(String name) {
+        if (name == null || name.isBlank()) {
+            return "upload";
+        }
+        int sep = Math.max(name.lastIndexOf('/'), name.lastIndexOf('\\'));
+        if (sep >= 0) {
+            name = name.substring(sep + 1);
+        }
+        return name.replaceAll("[^A-Za-z0-9._-]", "_");
     }
 }

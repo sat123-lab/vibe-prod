@@ -219,7 +219,7 @@ public class WebRtcSignalingService {
         }
         String t = body.getSignalType().toLowerCase();
         if (!t.equals("offer") && !t.equals("answer") && !t.equals("ice")
-                && !t.equals("join") && !t.equals("leave")) {
+                && !t.equals("join") && !t.equals("leave") && !t.equals("filter")) {
             throw new RuntimeException("Invalid signalType");
         }
     }

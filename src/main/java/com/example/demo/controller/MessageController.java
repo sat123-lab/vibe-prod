@@ -40,6 +40,15 @@ public class MessageController {
         return messageService.getMessages(authentication.getName(), userId);
     }
 
+    @GetMapping("/can-message/{userId}")
+    public java.util.Map<String, Boolean> canMessage(
+            @PathVariable Long userId,
+            Authentication authentication
+    ) {
+        boolean allowed = messageService.canMessage(authentication.getName(), userId);
+        return java.util.Map.of("allowed", allowed);
+    }
+
     @PostMapping("/send")
     public ChatMessage sendMessage(
             @RequestBody SendMessageRequest request,

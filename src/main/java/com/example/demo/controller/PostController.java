@@ -149,12 +149,11 @@ public class PostController {
 
     @GetMapping("/{postId}")
 
-    public Post getPostById(
+    public PostFeedDto getPostById(
             @PathVariable Long postId
     ) {
 
-        return postService
-                .getPostById(postId);
+        return postService.getPostDtoById(postId);
     }
 
     // =========================
@@ -172,7 +171,7 @@ public class PostController {
 
     @GetMapping("/user/{userId}")
 
-    public List<Post> getPostsByUser(
+    public List<PostFeedDto> getPostsByUser(
             @PathVariable Long userId,
             Authentication authentication
     ) {
@@ -181,7 +180,7 @@ public class PostController {
                 ? authentication.getName()
                 : null;
 
-        return postService.getPostsByUser(userId, email);
+        return postService.getPostsByUserDto(userId, email);
     }
 
     // =========================

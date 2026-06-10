@@ -29,6 +29,7 @@ public class CallService {
     private final UserRepository userRepository;
     private final NotificationRepository notificationRepository;
     private final MessageService messageService;
+    private final PushNotificationService pushNotificationService;
 
     private static final List<String> BUSY_STATUSES = List.of("RINGING", "ACTIVE");
     /** Incoming ring older than this is treated as abandoned. */
@@ -271,6 +272,22 @@ public class CallService {
                 .read(false)
                 .build();
         notificationRepository.save(notification);
+
+        if ("CALL".equals(type) && relatedId != null) {
+            String media = message.contains("video") ? "video" : "voice";
+            PushNotificationService.Push push = PushNotificationService.Push
+                    .of(sender.getName(), message, "calls")
+                    .deeplink("myapp://call/" + relatedId)
+                    .collapse("call-" + relatedId)
+                    .withData(java.util.Map.of(
+                            "type", "incoming_call",
+                            "callId", String.valueOf(relatedId),
+                            "callerId", String.valueOf(sender.getId()),
+                            "callerName", sender.getName(),
+                            "callType", media.contains("video") ? "VIDEO" : "VOICE"
+                    ));
+            pushNotificationService.sendToUser(receiver.getId(), push);
+        }
     }
 
     private String callTypeLabel(CallSession session) {
