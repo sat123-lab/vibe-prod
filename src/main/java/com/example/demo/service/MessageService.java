@@ -12,6 +12,7 @@ import com.example.demo.repository.NotificationRepository;
 import com.example.demo.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -199,7 +200,70 @@ public class MessageService {
             realtimeEventService.toPrivateChatsAdmin(meta);
         } catch (Exception ignored) { /* never break sends on telemetry */ }
 
+        try {
+            java.util.Map<String, Object> inbox = new java.util.HashMap<>();
+            inbox.put("messageId", saved.getId());
+            inbox.put("conversationId", conversation.getId());
+            inbox.put("senderId", sender.getId());
+            inbox.put("senderName", sender.getName());
+            inbox.put("unreadCount", chatMessageRepository.countUnreadForUser(receiver.getId()));
+            realtimeEventService.toUser(
+                    receiver.getId(), RealtimeEventService.TYPE_MESSAGE_NEW, inbox);
+        } catch (Exception ignored) { /* never break sends on realtime */ }
+
         return saved;
+    }
+
+    public long getUnreadCount(String email) {
+        User current = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        return chatMessageRepository.countUnreadForUser(current.getId());
+    }
+
+    @Transactional
+    public long markConversationRead(String email, Long otherUserId) {
+        User current = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        User other = userRepository.findById(otherUserId)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        Conversation conversation = conversationRepository.findBetweenUsers(current, other)
+                .orElse(null);
+        if (conversation == null) {
+            return getUnreadCount(email);
+        }
+
+        List<ChatMessage> unread = chatMessageRepository.findUnreadInConversation(
+                conversation.getId(), current.getId());
+        if (unread.isEmpty()) {
+            return getUnreadCount(email);
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        for (ChatMessage m : unread) {
+            m.setReadAt(now);
+            if (m.getExpiresInSeconds() != null && m.getExpiresInSeconds() > 0) {
+                m.setExpiresAt(now.plusSeconds(m.getExpiresInSeconds()));
+            }
+        }
+        chatMessageRepository.saveAll(unread);
+
+        long remaining = chatMessageRepository.countUnreadForUser(current.getId());
+        pushUnreadCountToUser(current.getId(), remaining);
+        return remaining;
+    }
+
+    private void pushUnreadCountToUser(Long userId) {
+        if (userId == null) return;
+        long count = chatMessageRepository.countUnreadForUser(userId);
+        pushUnreadCountToUser(userId, count);
+    }
+
+    private void pushUnreadCountToUser(Long userId, long count) {
+        java.util.Map<String, Object> payload = new java.util.HashMap<>();
+        payload.put("unreadCount", count);
+        realtimeEventService.toUser(
+                userId, RealtimeEventService.TYPE_MESSAGE_UNREAD, payload);
     }
 
     public void saveCallLog(

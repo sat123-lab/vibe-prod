@@ -24,6 +24,8 @@ public class RealtimeEventService {
     public static final String TYPE_MESSAGE_DELETED   = "message.deleted";
     public static final String TYPE_MESSAGE_EXPIRED   = "message.expired";
     public static final String TYPE_MESSAGE_READ      = "message.read";
+    public static final String TYPE_MESSAGE_NEW       = "message.new";
+    public static final String TYPE_MESSAGE_UNREAD    = "message.unread";
     public static final String TYPE_SESSION_REVOKED   = "session.revoked";
     public static final String TYPE_SECURE_ALERT      = "secure.alert";
     public static final String TYPE_TEMP_BAN          = "secure.tempban";

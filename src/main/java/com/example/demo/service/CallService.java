@@ -30,6 +30,7 @@ public class CallService {
     private final NotificationRepository notificationRepository;
     private final MessageService messageService;
     private final PushNotificationService pushNotificationService;
+    private final MediaUrlService mediaUrlService;
 
     private static final List<String> BUSY_STATUSES = List.of("RINGING", "ACTIVE");
     /** Incoming ring older than this is treated as abandoned. */
@@ -275,17 +276,21 @@ public class CallService {
 
         if ("CALL".equals(type) && relatedId != null) {
             String media = message.contains("video") ? "video" : "voice";
+            String profileImage = mediaUrlService.resolve(sender.getProfileImage());
+            java.util.Map<String, String> data = new java.util.HashMap<>();
+            data.put("type", "incoming_call");
+            data.put("callId", String.valueOf(relatedId));
+            data.put("callerId", String.valueOf(sender.getId()));
+            data.put("callerName", sender.getName());
+            data.put("callType", media.contains("video") ? "VIDEO" : "VOICE");
+            if (profileImage != null && !profileImage.isBlank()) {
+                data.put("callerProfileImage", profileImage);
+            }
             PushNotificationService.Push push = PushNotificationService.Push
                     .of(sender.getName(), message, "calls")
                     .deeplink("myapp://call/" + relatedId)
                     .collapse("call-" + relatedId)
-                    .withData(java.util.Map.of(
-                            "type", "incoming_call",
-                            "callId", String.valueOf(relatedId),
-                            "callerId", String.valueOf(sender.getId()),
-                            "callerName", sender.getName(),
-                            "callType", media.contains("video") ? "VIDEO" : "VOICE"
-                    ));
+                    .withData(data);
             pushNotificationService.sendToUser(receiver.getId(), push);
         }
     }
@@ -371,6 +376,18 @@ public class CallService {
                         session.getCallType(),
                         "MISSED",
                         null);
+                User caller = session.getCaller();
+                User receiver = session.getReceiver();
+                if (caller != null && receiver != null) {
+                    PushNotificationService.Push missed = PushNotificationService.Push
+                            .of("Missed call",
+                                    receiver.getName() + " didn't answer your "
+                                            + callTypeLabel(session) + " call",
+                                    "calls")
+                            .deeplink("myapp://call/missed/" + session.getId())
+                            .collapse("missed-call-" + session.getId());
+                    pushNotificationService.sendToUser(caller.getId(), missed);
+                }
             } catch (Exception e) {
                 log.warn("Call log skipped for session {}: {}", session.getId(), e.getMessage());
             }

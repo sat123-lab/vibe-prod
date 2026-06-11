@@ -58,4 +58,19 @@ public class MessageController {
         // flow through to the entity.
         return messageService.sendMessage(authentication.getName(), request);
     }
+
+    @GetMapping("/unread-count")
+    public java.util.Map<String, Long> unreadCount(Authentication authentication) {
+        long count = messageService.getUnreadCount(authentication.getName());
+        return java.util.Map.of("count", count);
+    }
+
+    @PostMapping("/with/{userId}/read")
+    public java.util.Map<String, Long> markConversationRead(
+            @PathVariable Long userId,
+            Authentication authentication
+    ) {
+        long count = messageService.markConversationRead(authentication.getName(), userId);
+        return java.util.Map.of("count", count);
+    }
 }

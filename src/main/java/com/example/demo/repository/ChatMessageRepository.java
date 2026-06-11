@@ -106,4 +106,26 @@ public interface ChatMessageRepository
             @Param("q") String query,
             Pageable pageable);
 
+    /** Unread direct messages for the inbox badge (not sent by this user). */
+    @Query("""
+           SELECT COUNT(m) FROM ChatMessage m
+            WHERE m.deletedForEveryone = false
+              AND m.readAt IS NULL
+              AND m.sender.id <> :userId
+              AND (m.conversation.userOne.id = :userId
+                   OR m.conversation.userTwo.id = :userId)
+           """)
+    long countUnreadForUser(@Param("userId") Long userId);
+
+    @Query("""
+           SELECT m FROM ChatMessage m
+            WHERE m.conversation.id = :conversationId
+              AND m.deletedForEveryone = false
+              AND m.readAt IS NULL
+              AND m.sender.id <> :readerId
+           """)
+    List<ChatMessage> findUnreadInConversation(
+            @Param("conversationId") Long conversationId,
+            @Param("readerId") Long readerId);
+
 }
