@@ -8,8 +8,6 @@ import com.example.demo.security.SecurityProperties;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.core.annotation.Order;
-import org.springframework.core.Ordered;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.ProviderManager;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
@@ -22,6 +20,7 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -44,24 +43,7 @@ public class SecurityConfig {
     private final AdminAccessGuard adminAccessGuard;
     private final SecurityProperties securityProperties;
 
-    /**
-     * WebSocket/STOMP handshake must not require HTTP authentication.
-     * JWT is validated on the STOMP CONNECT frame instead.
-     */
     @Bean
-    @Order(Ordered.HIGHEST_PRECEDENCE)
-    public SecurityFilterChain webSocketSecurityFilterChain(HttpSecurity http) throws Exception {
-        http
-                .securityMatcher("/ws-native/**", "/ws/**")
-                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-                .csrf(AbstractHttpConfigurer::disable)
-                .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .authorizeHttpRequests(auth -> auth.anyRequest().permitAll());
-        return http.build();
-    }
-
-    @Bean
-    @Order(Ordered.HIGHEST_PRECEDENCE + 1)
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
@@ -72,6 +54,12 @@ public class SecurityConfig {
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(org.springframework.http.HttpMethod.OPTIONS, "/**").permitAll()
+                        // STOMP handshake — auth happens on STOMP CONNECT, not HTTP upgrade.
+                        .requestMatchers(
+                                PathPatternRequestMatcher.withDefaults().matcher("/ws-native"),
+                                PathPatternRequestMatcher.withDefaults().matcher("/ws-native/**"),
+                                PathPatternRequestMatcher.withDefaults().matcher("/ws/**")
+                        ).permitAll()
                         .requestMatchers(
                                 "/auth/**",
                                 "/api/auth/**",
@@ -83,8 +71,6 @@ public class SecurityConfig {
                                 "/posts/{postId}",
                                 "/posts/user/*/count",
                                 "/ads/active",
-                                "/ws/**",
-                                "/ws-native/**",
                                 "/media/serve/**",
                                 "/actuator/health",
                                 "/actuator/info",

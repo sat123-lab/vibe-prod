@@ -39,7 +39,10 @@ public class WsJwtChannelInterceptor implements ChannelInterceptor {
         StompHeaderAccessor accessor = MessageHeaderAccessor.getAccessor(message, StompHeaderAccessor.class);
         if (accessor == null) return message;
 
-        if (StompCommand.CONNECT.equals(accessor.getCommand())) {
+        StompCommand command = accessor.getCommand();
+        if (command == null) return message;
+
+        if (StompCommand.CONNECT.equals(command)) {
             String auth = firstHeader(accessor, "Authorization");
             String token = (auth != null && auth.startsWith("Bearer ")) ? auth.substring(7) : null;
             if (token == null) {
@@ -79,18 +82,18 @@ public class WsJwtChannelInterceptor implements ChannelInterceptor {
             accessor.setUser(authToken);
             accessor.getSessionAttributes().put("userId", user.getId());
             accessor.getSessionAttributes().put("email", email);
+            return message;
         }
 
-        if (StompCommand.SUBSCRIBE.equals(accessor.getCommand())
-                || StompCommand.SEND.equals(accessor.getCommand())) {
+        if (StompCommand.SUBSCRIBE.equals(command) || StompCommand.SEND.equals(command)) {
             Long uid = (Long) accessor.getSessionAttributes().get("userId");
             if (uid == null) {
-                log.warn("WS {} rejected — no authenticated session.", accessor.getCommand());
+                log.warn("WS {} rejected — no authenticated STOMP session.", command);
                 throw new SecurityException("Not authenticated");
             }
         }
 
-        if (StompCommand.SUBSCRIBE.equals(accessor.getCommand())) {
+        if (StompCommand.SUBSCRIBE.equals(command)) {
             String dest = accessor.getDestination();
             Long uid = (Long) accessor.getSessionAttributes().get("userId");
             // Block subscriptions to other users' private user-topics.
