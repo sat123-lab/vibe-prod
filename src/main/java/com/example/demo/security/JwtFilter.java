@@ -37,6 +37,19 @@ public class JwtFilter extends OncePerRequestFilter {
     private final JwtUtil jwtUtil;
     private final TokenManager tokenManager;
 
+    /**
+     * WebSocket upgrade is authenticated in the STOMP CONNECT frame
+     * ({@link WsJwtChannelInterceptor}), not during the HTTP handshake.
+     */
+    @Override
+    protected boolean shouldNotFilter(HttpServletRequest request) {
+        String path = request.getServletPath();
+        if (path == null || path.isEmpty()) {
+            path = request.getRequestURI();
+        }
+        return path.startsWith("/ws-native") || path.startsWith("/ws/");
+    }
+
     @Override
     protected void doFilterInternal(
             HttpServletRequest request,

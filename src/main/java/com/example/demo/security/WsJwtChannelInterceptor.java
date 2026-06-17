@@ -81,6 +81,15 @@ public class WsJwtChannelInterceptor implements ChannelInterceptor {
             accessor.getSessionAttributes().put("email", email);
         }
 
+        if (StompCommand.SUBSCRIBE.equals(accessor.getCommand())
+                || StompCommand.SEND.equals(accessor.getCommand())) {
+            Long uid = (Long) accessor.getSessionAttributes().get("userId");
+            if (uid == null) {
+                log.warn("WS {} rejected — no authenticated session.", accessor.getCommand());
+                throw new SecurityException("Not authenticated");
+            }
+        }
+
         if (StompCommand.SUBSCRIBE.equals(accessor.getCommand())) {
             String dest = accessor.getDestination();
             Long uid = (Long) accessor.getSessionAttributes().get("userId");
