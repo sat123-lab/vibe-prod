@@ -2,11 +2,13 @@ package com.example.demo.service;
 
 import com.example.demo.dto.CursorPage;
 import com.example.demo.dto.ReelDto;
+import com.example.demo.entity.Post;
 import com.example.demo.entity.Reel;
 import com.example.demo.entity.ReelComment;
 import com.example.demo.entity.ReelLike;
 import com.example.demo.entity.ReelView;
 import com.example.demo.entity.User;
+import com.example.demo.repository.PostRepository;
 import com.example.demo.repository.ReelCommentRepository;
 import com.example.demo.recommendation.SignalKinds;
 import com.example.demo.repository.ReelLikeRepository;
@@ -59,6 +61,8 @@ public class ReelService {
     private final ContentModerationService moderation;
     private final HashtagService hashtags;
     private final RealtimeEventService realtime;
+    private final MediaUrlService mediaUrlService;
+    private final PostRepository postRepository;
 
     /**
      * Optional — wired via setter so this service stays loadable even
@@ -127,7 +131,8 @@ public class ReelService {
                 Set.copyOf(likes.findLikedIds(viewer, page.stream().map(Reel::getId).toList()));
 
         List<ReelDto> dtos = page.stream()
-                .map(r -> ReelDto.from(r, userMap.get(r.getUserId()), likedIds.contains(r.getId())))
+                .map(r -> enrich(ReelDto.from(
+                        r, userMap.get(r.getUserId()), likedIds.contains(r.getId()))))
                 .toList();
 
         LocalDateTime last = page.get(page.size() - 1).getCreatedAt();
@@ -177,7 +182,35 @@ public class ReelService {
         Reel saved = reels.save(reel);
         // Now that we have the id, attach hashtag usage rows.
         hashtags.recordEntityRefs(extracted, "REEL", saved.getId());
-        return ReelDto.from(saved, user, false);
+        mirrorAsPost(user, saved);
+        return enrich(ReelDto.from(saved, user, false));
+    }
+
+    private ReelDto enrich(ReelDto dto) {
+        if (dto == null) {
+            return null;
+        }
+        dto.setVideoUrl(mediaUrlService.resolve(dto.getVideoUrl()));
+        dto.setThumbnailUrl(mediaUrlService.resolve(dto.getThumbnailUrl()));
+        dto.setUserProfileImage(mediaUrlService.resolve(dto.getUserProfileImage()));
+        return dto;
+    }
+
+    private void mirrorAsPost(User user, Reel reel) {
+        if (reel.getVideoUrl() == null || reel.getVideoUrl().isBlank()) {
+            return;
+        }
+        if (postRepository.existsByUser_IdAndVideoUrl(user.getId(), reel.getVideoUrl())) {
+            return;
+        }
+        Post post = new Post();
+        post.setUser(user);
+        post.setCaption(reel.getCaption());
+        post.setVideoUrl(reel.getVideoUrl());
+        post.setThumbnailUrl(reel.getThumbnailUrl());
+        post.setType("video");
+        post.setCreatedAt(reel.getCreatedAt() != null ? reel.getCreatedAt() : LocalDateTime.now());
+        postRepository.save(post);
     }
 
     @Transactional

@@ -45,6 +45,12 @@ public interface ReelRepository extends JpaRepository<Reel, Long> {
            """)
     List<Reel> findByUser(@Param("userId") Long userId, Pageable pageable);
 
+    @Query("""
+           SELECT COUNT(r) FROM Reel r
+            WHERE r.userId = :userId AND r.deleted = false
+           """)
+    long countActiveByUserId(@Param("userId") Long userId);
+
     @Modifying @Transactional
     @Query("UPDATE Reel r SET r.likesCount = r.likesCount + :delta WHERE r.id = :id")
     int bumpLikes(@Param("id") Long id, @Param("delta") int delta);

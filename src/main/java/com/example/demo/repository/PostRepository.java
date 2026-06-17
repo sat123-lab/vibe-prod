@@ -34,6 +34,8 @@ public interface PostRepository
 
     long countByUser_Id(Long userId);
 
+    boolean existsByUser_IdAndVideoUrl(Long userId, String videoUrl);
+
     List<Post>
     findByVideoUrlIsNotNullOrderByCreatedAtDesc();
 

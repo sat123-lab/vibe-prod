@@ -2,10 +2,13 @@ package com.example.demo.service;
 
 import com.example.demo.dto.PostFeedDto;
 import com.example.demo.dto.PostRequest;
+import com.example.demo.dto.UserSummaryDto;
 import com.example.demo.entity.Post;
+import com.example.demo.entity.Reel;
 import com.example.demo.entity.User;
 import com.example.demo.repository.FollowRepository;
 import com.example.demo.repository.PostRepository;
+import com.example.demo.repository.ReelRepository;
 import com.example.demo.repository.UserRepository;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -15,7 +18,13 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+import org.springframework.data.domain.PageRequest;
 
 @Service
 public class PostService {
@@ -34,6 +43,9 @@ public class PostService {
 
     @Autowired
     private MediaUrlService mediaUrlService;
+
+    @Autowired
+    private ReelRepository reelRepository;
 
     /**
      * Optional — used to flip a SIGNED_UP referral to ACTIVATED when
@@ -189,33 +201,63 @@ public class PostService {
         return dto;
     }
 
+    private PostFeedDto toFeedDto(Reel reel, User user) {
+        UserSummaryDto author = null;
+        if (user != null) {
+            author = UserSummaryDto.builder()
+                    .id(user.getId())
+                    .name(user.getName())
+                    .bio(user.getBio())
+                    .profileImage(mediaUrlService.resolve(user.getProfileImage()))
+                    .privateAccount(user.isPrivateAccount())
+                    .build();
+        }
+        PostFeedDto dto = PostFeedDto.builder()
+                .id(reel.getId())
+                .caption(reel.getCaption())
+                .videoUrl(mediaUrlService.resolve(reel.getVideoUrl()))
+                .thumbnailUrl(mediaUrlService.resolve(reel.getThumbnailUrl()))
+                .type("video")
+                .likesCount(reel.getLikesCount())
+                .commentsCount(reel.getCommentsCount())
+                .createdAt(reel.getCreatedAt())
+                .user(author)
+                .build();
+        return dto;
+    }
+
     @Transactional(readOnly = true)
     public List<PostFeedDto> getPostsByUserDto(Long userId, String viewerEmail) {
         User target = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
-        List<Post> posts = postRepository.findByUserIdOrderByCreatedAtDesc(userId);
-
-        if (!target.isPrivateAccount()) {
-            return posts.stream().map(this::toFeedDto).toList();
-        }
-
-        if (viewerEmail == null || viewerEmail.isBlank()) {
+        User viewer = resolveViewer(viewerEmail);
+        if (!canViewUserContent(target, viewer)) {
             return List.of();
         }
 
-        User viewer = userRepository.findByEmail(viewerEmail)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+        List<PostFeedDto> result = new ArrayList<>(
+                postRepository.findByUserIdOrderByCreatedAtDesc(userId).stream()
+                        .map(this::toFeedDto)
+                        .toList());
 
-        if (viewer.getId().equals(target.getId())) {
-            return posts.stream().map(this::toFeedDto).toList();
+        Set<String> videoUrls = result.stream()
+                .map(PostFeedDto::getVideoUrl)
+                .filter(url -> url != null && !url.isBlank())
+                .collect(Collectors.toSet());
+
+        for (Reel reel : reelRepository.findByUser(userId, PageRequest.of(0, 100))) {
+            if (reel.isDeleted()) continue;
+            if (reel.getVideoUrl() != null && videoUrls.contains(reel.getVideoUrl())) {
+                continue;
+            }
+            result.add(toFeedDto(reel, target));
         }
 
-        if (followRepository.existsByFollowerAndFollowing(viewer, target)) {
-            return posts.stream().map(this::toFeedDto).toList();
-        }
-
-        return List.of();
+        result.sort(Comparator.comparing(
+                PostFeedDto::getCreatedAt,
+                Comparator.nullsLast(Comparator.reverseOrder())));
+        return result;
     }
 
     // GET FEED
@@ -239,9 +281,14 @@ public class PostService {
 
     @Transactional(readOnly = true)
     public PostFeedDto getPostDtoById(Long postId) {
-        Post post = postRepository.findById(postId)
-                .orElseThrow(() -> new RuntimeException("Post not found"));
-        return toFeedDto(post);
+        return postRepository.findById(postId)
+                .map(this::toFeedDto)
+                .orElseGet(() -> reelRepository.findById(postId)
+                        .filter(r -> !r.isDeleted())
+                        .map(r -> userRepository.findById(r.getUserId())
+                                .map(u -> toFeedDto(r, u))
+                                .orElseGet(() -> toFeedDto(r, null)))
+                        .orElseThrow(() -> new RuntimeException("Post not found")));
     }
 
     // GET SINGLE POST
@@ -262,7 +309,21 @@ public class PostService {
     // GET POSTS BY USER
 
     public long countPostsByUser(Long userId) {
-        return postRepository.countByUser_Id(userId);
+        long posts = postRepository.countByUser_Id(userId);
+        long reels = reelRepository.countActiveByUserId(userId);
+        return posts + reels - countOverlappingReelVideos(userId);
+    }
+
+    private long countOverlappingReelVideos(Long userId) {
+        long overlap = 0;
+        for (Reel reel : reelRepository.findByUser(userId, PageRequest.of(0, 200))) {
+            if (reel.isDeleted()) continue;
+            if (reel.getVideoUrl() != null
+                    && postRepository.existsByUser_IdAndVideoUrl(userId, reel.getVideoUrl())) {
+                overlap++;
+            }
+        }
+        return overlap;
     }
 
     public List<Post> getPostsByUser(
