@@ -5,6 +5,7 @@ import com.example.demo.security.JwtFilter;
 import com.example.demo.security.RateLimitFilter;
 import com.example.demo.security.SecureHeadersFilter;
 import com.example.demo.security.SecurityProperties;
+import com.example.demo.security.PublicMediaRequestMatcher;
 import com.example.demo.security.WebSocketHandshakeMatcher;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
@@ -52,18 +53,18 @@ public class SecurityConfig {
                         .requestMatchers(org.springframework.http.HttpMethod.OPTIONS, "/**").permitAll()
                         // STOMP/SockJS handshake — JWT validated on STOMP CONNECT frame.
                         .requestMatchers(WebSocketHandshakeMatcher.INSTANCE).permitAll()
+                        // Static uploads — public read; raw-URI matcher (ResourceHttpRequestHandler).
+                        .requestMatchers(PublicMediaRequestMatcher.INSTANCE).permitAll()
                         .requestMatchers(
                                 "/auth/**",
                                 "/api/auth/**",
                                 "/security/refresh",
                                 "/upload/**",
-                                "/uploads/**",
                                 "/posts/feed",
                                 "/posts/feed/page",
                                 "/posts/{postId}",
                                 "/posts/user/*/count",
                                 "/ads/active",
-                                "/media/serve/**",
                                 "/actuator/health",
                                 "/actuator/info",
                                 "/referrals/clicks",

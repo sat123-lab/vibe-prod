@@ -43,7 +43,8 @@ public class JwtFilter extends OncePerRequestFilter {
      */
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
-        return isWebSocketHandshakeRequest(request);
+        return isWebSocketHandshakeRequest(request)
+                || PublicMediaRequestMatcher.isPublicMediaRequest(request);
     }
 
     public static boolean isWebSocketHandshakeRequest(HttpServletRequest request) {

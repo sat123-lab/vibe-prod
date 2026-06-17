@@ -41,7 +41,8 @@ public class RateLimitFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest req, HttpServletResponse res, FilterChain chain)
             throws ServletException, IOException {
 
-        if (JwtFilter.isWebSocketHandshakeRequest(req)) {
+        if (JwtFilter.isWebSocketHandshakeRequest(req)
+                || PublicMediaRequestMatcher.isPublicMediaRequest(req)) {
             chain.doFilter(req, res);
             return;
         }
@@ -83,6 +84,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
     private static String routeGroup(String uri) {
         if (uri == null) return "api";
         if (uri.startsWith("/auth")) return "auth";
+        if (uri.startsWith("/uploads/")) return "api";
         if (uri.startsWith("/upload")) return "upload";
         return "api";
     }
