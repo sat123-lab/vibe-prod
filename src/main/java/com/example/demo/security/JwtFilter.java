@@ -46,10 +46,16 @@ public class JwtFilter extends OncePerRequestFilter {
         return isWebSocketHandshakeRequest(request);
     }
 
-    static boolean isWebSocketHandshakeRequest(HttpServletRequest request) {
+    public static boolean isWebSocketHandshakeRequest(HttpServletRequest request) {
         String path = request.getRequestURI();
-        if (path != null && (path.startsWith("/ws-native") || path.startsWith("/ws/"))) {
-            return true;
+        if (path != null) {
+            String ctx = request.getContextPath();
+            if (ctx != null && !ctx.isEmpty() && path.startsWith(ctx)) {
+                path = path.substring(ctx.length());
+            }
+            if (path.startsWith("/ws-native") || path.startsWith("/ws/")) {
+                return true;
+            }
         }
         return "websocket".equalsIgnoreCase(request.getHeader("Upgrade"));
     }

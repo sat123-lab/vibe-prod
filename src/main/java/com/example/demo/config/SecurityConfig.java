@@ -5,15 +5,16 @@ import com.example.demo.security.JwtFilter;
 import com.example.demo.security.RateLimitFilter;
 import com.example.demo.security.SecureHeadersFilter;
 import com.example.demo.security.SecurityProperties;
+import com.example.demo.security.WebSocketHandshakeMatcher;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.annotation.Order;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.ProviderManager;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.config.annotation.web.configuration.WebSecurityCustomizer;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.userdetails.UserDetailsService;
@@ -21,7 +22,6 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
-import org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -45,19 +45,24 @@ public class SecurityConfig {
     private final SecurityProperties securityProperties;
 
     /**
-     * WebSocket upgrade must bypass the HTTP security filter chain entirely.
-     * JWT auth happens on the STOMP CONNECT frame ({@link com.example.demo.security.WsJwtChannelInterceptor}).
+     * WebSocket/STOMP handshake — no HTTP auth. JWT is validated on STOMP CONNECT
+     * by {@link com.example.demo.security.WsJwtChannelInterceptor}.
+     *
+     * <p>Uses a dedicated, highest-priority filter chain with a raw-URI matcher because
+     * {@code PathPatternRequestMatcher} does not reliably match WebSocket upgrades.</p>
      */
     @Bean
-    public WebSecurityCustomizer webSocketSecurityCustomizer() {
-        return web -> web.ignoring().requestMatchers(
-                "/ws-native",
-                "/ws-native/**",
-                "/ws/**"
-        );
+    @Order(1)
+    public SecurityFilterChain webSocketSecurityFilterChain(HttpSecurity http) throws Exception {
+        http
+                .securityMatcher(WebSocketHandshakeMatcher.INSTANCE)
+                .csrf(AbstractHttpConfigurer::disable)
+                .authorizeHttpRequests(auth -> auth.anyRequest().permitAll());
+        return http.build();
     }
 
     @Bean
+    @Order(2)
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
@@ -68,12 +73,6 @@ public class SecurityConfig {
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(org.springframework.http.HttpMethod.OPTIONS, "/**").permitAll()
-                        // STOMP handshake — auth happens on STOMP CONNECT, not HTTP upgrade.
-                        .requestMatchers(
-                                PathPatternRequestMatcher.withDefaults().matcher("/ws-native"),
-                                PathPatternRequestMatcher.withDefaults().matcher("/ws-native/**"),
-                                PathPatternRequestMatcher.withDefaults().matcher("/ws/**")
-                        ).permitAll()
                         .requestMatchers(
                                 "/auth/**",
                                 "/api/auth/**",
