@@ -48,7 +48,8 @@ public class SecureWebSocketConfig implements WebSocketMessageBrokerConfigurer {
                 .withSockJS();
 
         registry.addEndpoint("/ws-native")
-                .setAllowedOriginPatterns("*");
+                .setAllowedOriginPatterns("*")
+                .withSockJS();
     }
 
     @Override

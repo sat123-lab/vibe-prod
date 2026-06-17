@@ -9,7 +9,6 @@ import com.example.demo.security.WebSocketHandshakeMatcher;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.core.annotation.Order;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.ProviderManager;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
@@ -29,10 +28,6 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import java.util.Arrays;
 import java.util.List;
 
-/**
- * Stateless JWT-only security. No form login, no HTTP Basic, and no
- * Spring Boot generated in-memory users.
- */
 @Configuration
 @EnableWebSecurity
 @RequiredArgsConstructor
@@ -44,25 +39,7 @@ public class SecurityConfig {
     private final AdminAccessGuard adminAccessGuard;
     private final SecurityProperties securityProperties;
 
-    /**
-     * WebSocket/STOMP handshake — no HTTP auth. JWT is validated on STOMP CONNECT
-     * by {@link com.example.demo.security.WsJwtChannelInterceptor}.
-     *
-     * <p>Uses a dedicated, highest-priority filter chain with a raw-URI matcher because
-     * {@code PathPatternRequestMatcher} does not reliably match WebSocket upgrades.</p>
-     */
     @Bean
-    @Order(1)
-    public SecurityFilterChain webSocketSecurityFilterChain(HttpSecurity http) throws Exception {
-        http
-                .securityMatcher(WebSocketHandshakeMatcher.INSTANCE)
-                .csrf(AbstractHttpConfigurer::disable)
-                .authorizeHttpRequests(auth -> auth.anyRequest().permitAll());
-        return http.build();
-    }
-
-    @Bean
-    @Order(2)
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
@@ -73,6 +50,8 @@ public class SecurityConfig {
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(org.springframework.http.HttpMethod.OPTIONS, "/**").permitAll()
+                        // STOMP/SockJS handshake — JWT validated on STOMP CONNECT frame.
+                        .requestMatchers(WebSocketHandshakeMatcher.INSTANCE).permitAll()
                         .requestMatchers(
                                 "/auth/**",
                                 "/api/auth/**",

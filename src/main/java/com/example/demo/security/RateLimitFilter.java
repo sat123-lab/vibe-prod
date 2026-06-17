@@ -41,6 +41,11 @@ public class RateLimitFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest req, HttpServletResponse res, FilterChain chain)
             throws ServletException, IOException {
 
+        if (JwtFilter.isWebSocketHandshakeRequest(req)) {
+            chain.doFilter(req, res);
+            return;
+        }
+
         String ip = clientIp(req);
         String group = routeGroup(req.getRequestURI());
         int limit = limitFor(group);

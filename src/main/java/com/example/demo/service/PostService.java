@@ -232,10 +232,18 @@ public class PostService {
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
         User viewer = resolveViewer(viewerEmail);
+        // Own profile always shows all posts, even when the account is private.
+        if (viewer != null && viewer.getId().equals(target.getId())) {
+            return buildUserFeedDtos(userId, target);
+        }
         if (!canViewUserContent(target, viewer)) {
             return List.of();
         }
 
+        return buildUserFeedDtos(userId, target);
+    }
+
+    private List<PostFeedDto> buildUserFeedDtos(Long userId, User target) {
         List<PostFeedDto> result = new ArrayList<>(
                 postRepository.findByUserIdOrderByCreatedAtDesc(userId).stream()
                         .map(this::toFeedDto)
