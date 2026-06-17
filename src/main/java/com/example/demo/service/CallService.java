@@ -31,6 +31,7 @@ public class CallService {
     private final MessageService messageService;
     private final PushNotificationService pushNotificationService;
     private final MediaUrlService mediaUrlService;
+    private final RealtimeEventService realtime;
 
     private static final List<String> BUSY_STATUSES = List.of("RINGING", "ACTIVE");
     /** Incoming ring older than this is treated as abandoned. */
@@ -160,6 +161,7 @@ public class CallService {
         session.setStatus("DECLINED");
         session.setEndedAt(LocalDateTime.now());
         callSessionRepository.save(session);
+        broadcastCallEnded(session);
 
         User caller = session.getCaller();
         messageService.saveCallLog(user, caller, session.getCallType(), "DECLINED", null);
@@ -185,6 +187,7 @@ public class CallService {
             session.setStatus("MISSED");
             session.setEndedAt(LocalDateTime.now());
             callSessionRepository.save(session);
+            broadcastCallEnded(session);
 
             User caller = session.getCaller();
             User receiver = session.getReceiver();
@@ -206,6 +209,7 @@ public class CallService {
             session.setStatus("ENDED");
             session.setEndedAt(LocalDateTime.now());
             callSessionRepository.save(session);
+            broadcastCallEnded(session);
 
             User caller = session.getCaller();
             messageService.saveCallLog(caller, session.getReceiver(), session.getCallType(), "ANSWERED", duration);
@@ -213,6 +217,7 @@ public class CallService {
             session.setStatus("ENDED");
             session.setEndedAt(LocalDateTime.now());
             callSessionRepository.save(session);
+            broadcastCallEnded(session);
         }
 
         return CallSessionDto.from(session);
@@ -368,6 +373,7 @@ public class CallService {
         session.setStatus(status);
         session.setEndedAt(endedAt);
         callSessionRepository.save(session);
+        broadcastCallEnded(session);
         if (saveMissedLog && "MISSED".equals(status)) {
             try {
                 messageService.saveCallLog(
@@ -403,5 +409,21 @@ public class CallService {
     private CallSession getSession(Long callId) {
         return callSessionRepository.findById(callId)
                 .orElseThrow(() -> new RuntimeException("Call not found"));
+    }
+
+    /** Instant hang-up on both devices via STOMP. */
+    private void broadcastCallEnded(CallSession session) {
+        if (session == null || session.getId() == null) return;
+        java.util.Map<String, Object> payload = new java.util.HashMap<>();
+        payload.put("callId", session.getId());
+        payload.put("status", session.getStatus());
+        User caller = session.getCaller();
+        User receiver = session.getReceiver();
+        if (caller != null) {
+            realtime.toUser(caller.getId(), RealtimeEventService.TYPE_CALL_ENDED, payload);
+        }
+        if (receiver != null) {
+            realtime.toUser(receiver.getId(), RealtimeEventService.TYPE_CALL_ENDED, payload);
+        }
     }
 }

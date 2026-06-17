@@ -41,6 +41,7 @@ public class RealtimeEventService {
     public static final String TYPE_CONV_PINNED       = "chat.pinned";
     public static final String TYPE_CONV_ARCHIVED     = "chat.archived";
     public static final String TYPE_CONV_FOLDERED     = "chat.foldered";
+    public static final String TYPE_CALL_ENDED        = "call.ended";
 
     private final SimpMessagingTemplate template;
 
