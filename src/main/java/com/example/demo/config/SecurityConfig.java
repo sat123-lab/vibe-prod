@@ -13,6 +13,7 @@ import org.springframework.security.authentication.ProviderManager;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.annotation.web.configuration.WebSecurityCustomizer;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.userdetails.UserDetailsService;
@@ -42,6 +43,19 @@ public class SecurityConfig {
     private final RateLimitFilter rateLimitFilter;
     private final AdminAccessGuard adminAccessGuard;
     private final SecurityProperties securityProperties;
+
+    /**
+     * WebSocket upgrade must bypass the HTTP security filter chain entirely.
+     * JWT auth happens on the STOMP CONNECT frame ({@link com.example.demo.security.WsJwtChannelInterceptor}).
+     */
+    @Bean
+    public WebSecurityCustomizer webSocketSecurityCustomizer() {
+        return web -> web.ignoring().requestMatchers(
+                "/ws-native",
+                "/ws-native/**",
+                "/ws/**"
+        );
+    }
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
