@@ -10,11 +10,13 @@ import com.example.demo.security.WebSocketHandshakeMatcher;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.annotation.Order;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.ProviderManager;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.annotation.web.configuration.WebSecurityCustomizer;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.userdetails.UserDetailsService;
@@ -40,7 +42,29 @@ public class SecurityConfig {
     private final AdminAccessGuard adminAccessGuard;
     private final SecurityProperties securityProperties;
 
+    /**
+     * Uploads must bypass the entire security filter chain — public read for feed/profile/reels.
+     */
     @Bean
+    public WebSecurityCustomizer publicUploadsCustomizer() {
+        return web -> web.ignoring().requestMatchers(
+                "/uploads",
+                "/uploads/**"
+        );
+    }
+
+    @Bean
+    @Order(0)
+    public SecurityFilterChain publicMediaFilterChain(HttpSecurity http) throws Exception {
+        http
+                .securityMatcher(PublicMediaRequestMatcher.INSTANCE)
+                .csrf(AbstractHttpConfigurer::disable)
+                .authorizeHttpRequests(auth -> auth.anyRequest().permitAll());
+        return http.build();
+    }
+
+    @Bean
+    @Order(1)
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))

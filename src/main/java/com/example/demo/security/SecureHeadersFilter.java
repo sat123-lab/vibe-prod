@@ -26,6 +26,11 @@ import java.io.IOException;
 public class SecureHeadersFilter extends OncePerRequestFilter {
 
     @Override
+    protected boolean shouldNotFilter(HttpServletRequest request) {
+        return PublicMediaRequestMatcher.isPublicMediaRequest(request);
+    }
+
+    @Override
     protected void doFilterInternal(HttpServletRequest req, HttpServletResponse res, FilterChain chain)
             throws ServletException, IOException {
 
@@ -34,6 +39,7 @@ public class SecureHeadersFilter extends OncePerRequestFilter {
         res.setHeader("X-Frame-Options", "DENY");
         res.setHeader("Referrer-Policy", "no-referrer");
         res.setHeader("Cross-Origin-Opener-Policy", "same-origin");
+        // Public API JSON stays same-site; /uploads/** sets cross-origin in PublicUploadsController.
         res.setHeader("Cross-Origin-Resource-Policy", "same-site");
         res.setHeader("Permissions-Policy",
                 "geolocation=(), camera=(), microphone=(self), payment=(), usb=(), midi=()");
