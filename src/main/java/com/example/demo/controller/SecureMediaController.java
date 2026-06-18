@@ -99,6 +99,8 @@ public class SecureMediaController {
                 .header(HttpHeaders.CONTENT_TYPE, contentType)
                 .header(HttpHeaders.CACHE_CONTROL, "private, max-age=60")
                 .header("X-Content-Type-Options", "nosniff")
+                .header("Access-Control-Allow-Origin", "*")
+                .header("Cross-Origin-Resource-Policy", "cross-origin")
                 .body(body);
     }
 
