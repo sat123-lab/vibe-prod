@@ -146,7 +146,9 @@ public class CallService {
 
         session.setStatus("ACTIVE");
         session.setAnsweredAt(LocalDateTime.now());
-        return CallSessionDto.from(callSessionRepository.save(session));
+        CallSession saved = callSessionRepository.save(session);
+        broadcastCallAccepted(saved);
+        return CallSessionDto.from(saved);
     }
 
     @Transactional
@@ -424,6 +426,18 @@ public class CallService {
         }
         if (receiver != null) {
             realtime.toUser(receiver.getId(), RealtimeEventService.TYPE_CALL_ENDED, payload);
+        }
+    }
+
+    /** Notify caller immediately when callee lifts the call. */
+    private void broadcastCallAccepted(CallSession session) {
+        if (session == null || session.getId() == null) return;
+        java.util.Map<String, Object> payload = new java.util.HashMap<>();
+        payload.put("callId", session.getId());
+        payload.put("status", "ACTIVE");
+        User caller = session.getCaller();
+        if (caller != null) {
+            realtime.toUser(caller.getId(), RealtimeEventService.TYPE_CALL_ACCEPTED, payload);
         }
     }
 }
