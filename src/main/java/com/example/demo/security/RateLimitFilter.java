@@ -77,6 +77,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
         return switch (group) {
             case "auth" -> properties.getRateLimit().getAuthRpm();
             case "upload" -> properties.getRateLimit().getUploadRpm();
+            case "realtime" -> properties.getRateLimit().getRealtimeRpm();
             default -> properties.getRateLimit().getApiRpm();
         };
     }
@@ -86,6 +87,12 @@ public class RateLimitFilter extends OncePerRequestFilter {
         if (uri.startsWith("/auth")) return "auth";
         if (uri.startsWith("/uploads/")) return "api";
         if (uri.startsWith("/upload")) return "upload";
+        if (uri.contains("/webrtc")
+                || uri.contains("/calls/incoming")
+                || uri.contains("/messaging/presence/")
+                || uri.endsWith("/read")) {
+            return "realtime";
+        }
         return "api";
     }
 

@@ -39,8 +39,9 @@ public class SecurityProperties {
     @Data
     public static class RateLimit {
         private int authRpm = 12;
-        private int apiRpm = 240;
+        private int apiRpm = 360;
         private int uploadRpm = 30;
+        private int realtimeRpm = 900;
     }
 
     @Data
