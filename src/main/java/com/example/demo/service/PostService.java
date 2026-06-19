@@ -13,6 +13,9 @@ import com.example.demo.repository.UserRepository;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -23,8 +26,6 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
-
-import org.springframework.data.domain.PageRequest;
 
 @Service
 public class PostService {
@@ -96,18 +97,18 @@ public class PostService {
                 LocalDateTime.now()
         );
 
-        // IMAGE UPLOAD
+        // IMAGE UPLOAD — store bytes in MySQL (persists across Render redeploys)
 
         if (image != null &&
                 !image.isEmpty()) {
 
-            String imageUrl =
-                    fileService.uploadFile(
-                            image
-                    );
-
-            post.setImageUrl(imageUrl);
-
+            post.setImageData(image.getBytes());
+            post.setImageType(
+                    image.getContentType() != null
+                            && !image.getContentType().isBlank()
+                            ? image.getContentType()
+                            : "image/jpeg"
+            );
             post.setType("image");
         }
 
@@ -137,6 +138,11 @@ public class PostService {
         }
 
         Post saved = postRepository.save(post);
+
+        if (saved.hasStoredImage()) {
+            saved.setImageUrl("/api/posts/" + saved.getId() + "/image");
+            saved = postRepository.save(saved);
+        }
         // Best-effort referral activation. If the user came in via a
         // referral, their first post moves the funnel SIGNED_UP -> ACTIVATED.
         // Idempotent: ReferralService.markActivated only flips on the first call.
@@ -191,7 +197,7 @@ public class PostService {
         if (dto == null) {
             return null;
         }
-        dto.setImageUrl(mediaUrlService.resolve(dto.getImageUrl()));
+        dto.setImageUrl(resolvePostImageUrl(post));
         dto.setVideoUrl(mediaUrlService.resolve(dto.getVideoUrl()));
         dto.setThumbnailUrl(mediaUrlService.resolve(dto.getThumbnailUrl()));
         if (dto.getUser() != null) {
@@ -199,6 +205,34 @@ public class PostService {
                     mediaUrlService.resolve(dto.getUser().getProfileImage()));
         }
         return dto;
+    }
+
+    private String resolvePostImageUrl(Post post) {
+        if (post.getImageType() != null && !post.getImageType().isBlank()) {
+            return mediaUrlService.resolve("/api/posts/" + post.getId() + "/image");
+        }
+        return mediaUrlService.resolve(post.getImageUrl());
+    }
+
+    /**
+     * Streams image bytes stored in MySQL for {@code GET /api/posts/{id}/image}.
+     */
+    public ResponseEntity<byte[]> getPostImage(Long postId) {
+        return postRepository.findImageProjectionById(postId)
+                .filter(img -> img.getImageData() != null && img.getImageData().length > 0)
+                .map(img -> {
+                    String contentType = img.getImageType();
+                    if (contentType == null || contentType.isBlank()) {
+                        contentType = MediaType.IMAGE_JPEG_VALUE;
+                    }
+                    return ResponseEntity.ok()
+                            .header(HttpHeaders.CONTENT_TYPE, contentType)
+                            .header(HttpHeaders.CACHE_CONTROL, "public, max-age=604800")
+                            .header("Cross-Origin-Resource-Policy", "cross-origin")
+                            .header("Access-Control-Allow-Origin", "*")
+                            .body(img.getImageData());
+                })
+                .orElse(ResponseEntity.notFound().build());
     }
 
     private PostFeedDto toFeedDto(Reel reel, User user) {

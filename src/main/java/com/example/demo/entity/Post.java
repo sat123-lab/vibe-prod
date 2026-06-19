@@ -28,9 +28,20 @@ public class Post {
 
     private String caption;
 
-    // IMAGE URL
+    // IMAGE URL (legacy path or /api/posts/{id}/image for DB-stored images)
 
     private String imageUrl;
+
+    // IMAGE BINARY (persisted in MySQL — survives ephemeral disk on Render)
+
+    @Lob
+    @Basic(fetch = FetchType.LAZY)
+    @JsonIgnore
+    @Column(name = "image_data")
+    private byte[] imageData;
+
+    @Column(name = "image_type", length = 50)
+    private String imageType;
 
     // VIDEO URL
 
@@ -138,6 +149,27 @@ public class Post {
             String imageUrl
     ) {
         this.imageUrl = imageUrl;
+    }
+
+    public byte[] getImageData() {
+        return imageData;
+    }
+
+    public void setImageData(byte[] imageData) {
+        this.imageData = imageData;
+    }
+
+    public String getImageType() {
+        return imageType;
+    }
+
+    public void setImageType(String imageType) {
+        this.imageType = imageType;
+    }
+
+    public boolean hasStoredImage() {
+        return imageType != null && !imageType.isBlank()
+                && imageData != null && imageData.length > 0;
     }
 
     public String getVideoUrl() {

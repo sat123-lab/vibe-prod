@@ -43,7 +43,7 @@ public class SecurityConfig {
     private final SecurityProperties securityProperties;
 
     /**
-     * Uploads must bypass the entire security filter chain — public read for feed/profile/reels.
+     * Legacy disk uploads — still served for older posts; new images use MySQL BLOB.
      */
     @Bean
     public WebSecurityCustomizer publicUploadsCustomizer() {
@@ -59,6 +59,7 @@ public class SecurityConfig {
         http
                 .securityMatcher(PublicMediaRequestMatcher.INSTANCE)
                 .csrf(AbstractHttpConfigurer::disable)
+                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .authorizeHttpRequests(auth -> auth.anyRequest().permitAll());
         return http.build();
     }
@@ -77,23 +78,31 @@ public class SecurityConfig {
                         .requestMatchers(org.springframework.http.HttpMethod.OPTIONS, "/**").permitAll()
                         // STOMP/SockJS handshake — JWT validated on STOMP CONNECT frame.
                         .requestMatchers(WebSocketHandshakeMatcher.INSTANCE).permitAll()
-                        // Static uploads — public read; raw-URI matcher (ResourceHttpRequestHandler).
+                        // Static uploads + DB-served post images — public read.
                         .requestMatchers(PublicMediaRequestMatcher.INSTANCE).permitAll()
                         .requestMatchers(
                                 "/auth/**",
                                 "/api/auth/**",
                                 "/security/refresh",
                                 "/upload/**",
+                                // Feed & read-only post APIs (both legacy /posts and /api/posts paths)
                                 "/posts/feed",
                                 "/posts/feed/page",
-                                "/posts/{postId}",
+                                "/posts/*/image",
                                 "/posts/user/*/count",
+                                "/api/posts/feed",
+                                "/api/posts/feed/page",
+                                "/api/posts/*/image",
+                                "/api/posts/user/*/count",
                                 "/ads/active",
                                 "/actuator/health",
                                 "/actuator/info",
                                 "/referrals/clicks",
                                 "/referrals/resolve"
                         ).permitAll()
+                        // Single-post read — numeric id only (avoids shadowing /posts/feed etc.)
+                        .requestMatchers("/posts/{postId:[0-9]+}").permitAll()
+                        .requestMatchers("/api/posts/{postId:[0-9]+}").permitAll()
                         .requestMatchers("/admin/**").hasRole("ADMIN")
                         .anyRequest().authenticated()
                 )
@@ -119,21 +128,39 @@ public class SecurityConfig {
         return new ProviderManager(provider);
     }
 
+    /**
+     * CORS for Flutter Web (browser) and dev tools. Mobile apps do not send Origin
+     * headers and are unaffected. Set {@code app.security.cors.allowed-origins} in
+     * production to your web app URL(s), comma-separated.
+     */
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
         String origins = securityProperties.getCors().getAllowedOrigins();
+
         if (origins == null || origins.isBlank() || "*".equals(origins.trim())) {
-            config.setAllowedOriginPatterns(List.of("*"));
+            // Flutter Web + local dev + Render preview deploys
+            config.setAllowedOriginPatterns(List.of(
+                    "*",
+                    "http://localhost:*",
+                    "http://127.0.0.1:*",
+                    "https://*.onrender.com"
+            ));
             config.setAllowCredentials(false);
         } else {
             config.setAllowedOrigins(Arrays.asList(origins.split("\\s*,\\s*")));
             config.setAllowCredentials(true);
         }
+
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
         config.setExposedHeaders(List.of(
-                "X-RateLimit-Limit", "X-RateLimit-Remaining", "Retry-After"));
+                "X-RateLimit-Limit",
+                "X-RateLimit-Remaining",
+                "Retry-After",
+                "Content-Type",
+                "Content-Length"
+        ));
         config.setMaxAge(3600L);
 
         UrlBasedCorsConfigurationSource src = new UrlBasedCorsConfigurationSource();

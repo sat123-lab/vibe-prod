@@ -24,7 +24,13 @@ public final class PublicMediaRequestMatcher implements RequestMatcher {
         return path.startsWith("/uploads/")
                 || path.equals("/uploads")
                 || path.startsWith("/media/serve/")
-                || path.startsWith("/files/");
+                || path.startsWith("/files/")
+                || isPostImagePath(path);
+    }
+
+    private static boolean isPostImagePath(String path) {
+        return path.matches("/posts/\\d+/image")
+                || path.matches("/api/posts/\\d+/image");
     }
 
     static String normalizedPath(HttpServletRequest request) {

@@ -11,6 +11,7 @@ import com.example.demo.service.PostService;
 
 import org.springframework.beans.factory.annotation.Autowired;
 
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 
 import org.springframework.web.bind.annotation.*;
@@ -21,7 +22,7 @@ import java.util.List;
 
 @RestController
 
-@RequestMapping("/posts")
+@RequestMapping({"/posts", "/api/posts"})
 
 @CrossOrigin("*")
 
@@ -75,6 +76,17 @@ public class PostController {
                 image,
                 video
         );
+    }
+
+    // =========================
+    // SERVE POST IMAGE (MySQL BLOB)
+    // =========================
+
+    @GetMapping("/{postId}/image")
+    public ResponseEntity<byte[]> getPostImage(
+            @PathVariable Long postId
+    ) {
+        return postService.getPostImage(postId);
     }
 
     // =========================

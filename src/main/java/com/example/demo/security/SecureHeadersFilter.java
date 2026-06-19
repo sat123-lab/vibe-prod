@@ -38,8 +38,8 @@ public class SecureHeadersFilter extends OncePerRequestFilter {
         res.setHeader("X-Content-Type-Options", "nosniff");
         res.setHeader("X-Frame-Options", "DENY");
         res.setHeader("Referrer-Policy", "no-referrer");
-        res.setHeader("Cross-Origin-Opener-Policy", "same-origin");
-        // Public API JSON stays same-site; /uploads/** sets cross-origin in PublicUploadsController.
+        res.setHeader("Cross-Origin-Opener-Policy", "same-origin-allow-popups");
+        // Public media (/uploads/**, /api/posts/*/image) sets cross-origin in their controllers.
         res.setHeader("Cross-Origin-Resource-Policy", "same-site");
         res.setHeader("Permissions-Policy",
                 "geolocation=(), camera=(), microphone=(self), payment=(), usb=(), midi=()");

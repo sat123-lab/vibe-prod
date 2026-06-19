@@ -4,8 +4,10 @@ import com.example.demo.entity.Post;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.util.List;
+import java.util.Optional;
 
 public interface PostRepository
         extends JpaRepository<Post, Long> {
@@ -48,4 +50,8 @@ public interface PostRepository
     findByVideoUrlIsNotNullAndCaptionContainingIgnoreCaseOrderByCreatedAtDesc(
             String caption
     );
+
+    @Query("SELECT p.imageData AS imageData, p.imageType AS imageType "
+            + "FROM Post p WHERE p.id = :postId AND p.imageData IS NOT NULL")
+    Optional<PostImageProjection> findImageProjectionById(@Param("postId") Long postId);
 }
