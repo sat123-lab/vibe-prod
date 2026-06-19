@@ -153,7 +153,15 @@ public class SecurityConfig {
         }
 
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        config.setAllowedHeaders(List.of("*"));
+        config.setAllowedHeaders(List.of(
+                "Authorization",
+                "X-Access-Token",
+                "Content-Type",
+                "Accept",
+                "X-Requested-With",
+                "X-Device-Id",
+                "*"
+        ));
         config.setExposedHeaders(List.of(
                 "X-RateLimit-Limit",
                 "X-RateLimit-Remaining",

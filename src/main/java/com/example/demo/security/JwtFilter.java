@@ -68,12 +68,12 @@ public class JwtFilter extends OncePerRequestFilter {
             FilterChain filterChain
     ) throws ServletException, IOException {
 
-        final String authHeader = request.getHeader("Authorization");
-        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+        final String authHeader = resolveBearerToken(request);
+        if (authHeader == null) {
             filterChain.doFilter(request, response);
             return;
         }
-        final String jwt = authHeader.substring(7);
+        final String jwt = authHeader;
 
         if (SecurityContextHolder.getContext().getAuthentication() == null) {
 
@@ -109,5 +109,21 @@ public class JwtFilter extends OncePerRequestFilter {
         }
 
         filterChain.doFilter(request, response);
+    }
+
+    /**
+     * Reads JWT from {@code Authorization: Bearer} or {@code X-Access-Token} (fallback
+     * for some browsers/proxies that drop Authorization on multipart POST).
+     */
+    static String resolveBearerToken(HttpServletRequest request) {
+        String authHeader = request.getHeader("Authorization");
+        if (authHeader != null && authHeader.startsWith("Bearer ")) {
+            return authHeader.substring(7).trim();
+        }
+        String alt = request.getHeader("X-Access-Token");
+        if (alt != null && !alt.isBlank()) {
+            return alt.trim();
+        }
+        return null;
     }
 }
