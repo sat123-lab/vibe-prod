@@ -48,6 +48,9 @@ public class PostService {
     @Autowired
     private ReelRepository reelRepository;
 
+    @Autowired
+    private ImageCompressionService imageCompressionService;
+
     /**
      * Optional — used to flip a SIGNED_UP referral to ACTIVATED when
      * the referee creates their first post. Keeps the funnel honest;
@@ -102,13 +105,13 @@ public class PostService {
         if (image != null &&
                 !image.isEmpty()) {
 
-            post.setImageData(image.getBytes());
-            post.setImageType(
-                    image.getContentType() != null
-                            && !image.getContentType().isBlank()
-                            ? image.getContentType()
-                            : "image/jpeg"
-            );
+            ImageCompressionService.CompressedImage compressed =
+                    imageCompressionService.compressForStorage(
+                            image.getBytes(),
+                            image.getContentType()
+                    );
+            post.setImageData(compressed.data());
+            post.setImageType(compressed.contentType());
             post.setType("image");
         }
 

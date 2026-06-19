@@ -37,7 +37,7 @@ public class Post {
     @Lob
     @Basic(fetch = FetchType.LAZY)
     @JsonIgnore
-    @Column(name = "image_data")
+    @Column(name = "image_data", columnDefinition = "LONGBLOB")
     private byte[] imageData;
 
     @Column(name = "image_type", length = 50)
