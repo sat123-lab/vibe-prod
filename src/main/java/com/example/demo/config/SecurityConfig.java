@@ -148,7 +148,11 @@ public class SecurityConfig {
             ));
             config.setAllowCredentials(false);
         } else {
-            config.setAllowedOrigins(Arrays.asList(origins.split("\\s*,\\s*")));
+            // Explicit prod origins plus local Flutter Web / Render dev builds.
+            config.setAllowedOriginPatterns(Arrays.asList(origins.split("\\s*,\\s*")));
+            config.addAllowedOriginPattern("http://localhost:*");
+            config.addAllowedOriginPattern("http://127.0.0.1:*");
+            config.addAllowedOriginPattern("https://*.onrender.com");
             config.setAllowCredentials(true);
         }
 
